@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Kanban Board</title>
+  <!-- Google Font for a cute, rounded look -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;700&display=swap">
+  <style>
+    /* CSS Variables for Themes */
+    :root {
+      --primary-color: #ff6f61;
+      --secondary-color: #ff9a8d;
+      --background-gradient: linear-gradient(135deg, #f9f9ff, #e0eafc);
+      --text-color: #333;
+      --box-shadow-color: rgba(0,0,0,0.1);
+    }
+    .theme-0 {
+      --primary-color: #ff6f61;
+      --secondary-color: #ff9a8d;
+      --background-gradient: linear-gradient(135deg, #f9f9ff, #e0eafc);
+      --text-color: #333;
+    }
+    .theme-1 {
+      --primary-color: #6a8caf;
+      --secondary-color: #8db3d9;
+      --background-gradient: linear-gradient(135deg, #e0f7fa, #b2ebf2);
+      --text-color: #333;
+    }
+    .theme-2 {
+      --primary-color: #8bc34a;
+      --secondary-color: #aed581;
+      --background-gradient: linear-gradient(135deg, #f1f8e9, #dcedc8);
+      --text-color: #333;
+    }
+    
+    /* Base Styles */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Quicksand', sans-serif;
+      background: var(--background-gradient);
+      padding: 20px;
+      color: var(--text-color);
+      transition: background 0.5s, color 0.5s;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    header h1 {
+      font-size: 2em;
+      font-weight: 700;
+      color: var(--primary-color);
+    }
+    /* Header Controls: Theme slider, clear & add task */
+    #header-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    #themeSlider {
+      width: 100px;
+    }
+    #clearCompletedBtn, #addTaskBtn {
+      background: var(--secondary-color);
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 30px;
+      cursor: pointer;
+      font-size: 1em;
+      transition: background 0.3s;
+    }
+    #clearCompletedBtn:hover, #addTaskBtn:hover {
+      background: var(--primary-color);
+    }
+    
+    /* Board Layout */
+    .board {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .column {
+      background: #ffffff;
+      border-radius: 15px;
+      width: 300px;
+      padding: 15px;
+      box-shadow: 0 4px 8px var(--box-shadow-color);
+    }
+    .column h2 {
+      text-align: center;
+      margin-bottom: 10px;
+      color: #555;
+      font-weight: 500;
+    }
+    .task-list { min-height: 50px; }
+    
+    /* Task Card Styles */
+    .task {
+      background: #fff;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px var(--box-shadow-color);
+      cursor: grab;
+      position: relative;
+      transition: transform 0.2s;
+    }
+    .task:hover { transform: scale(1.02); }
+    .task.dragging { opacity: 0.5; }
+    .task strong { color: var(--primary-color); }
+    .task img {
+      max-width: 100%;
+      max-height: 150px;
+      margin-top: 10px;
+      border-radius: 10px;
+    }
+    .task p, .task .extra {
+      font-size: 0.9em;
+      color: #666;
+      margin-top: 5px;
+    }
+    .delete-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      background: var(--primary-color);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      padding: 5px 8px;
+      font-size: 0.8em;
+      cursor: pointer;
+    }
+    .delete-btn:hover { background: var(--secondary-color); }
+    
+    /* Modal Styles (for Add Task and Pomodoro) */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0; top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.4);
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: #fff;
+      padding: 20px;
+      border-radius: 15px;
+      width: 90%;
+      max-width: 500px;
+      position: relative;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .modal-content h2 {
+      margin-bottom: 15px;
+      text-align: center;
+      color: var(--primary-color);
+    }
+    .modal-content input,
+    .modal-content textarea,
+    .modal-content select {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 1em;
+    }
+    .modal-content label {
+      font-size: 0.9em;
+      margin-bottom: 5px;
+      display: block;
+      color: #333;
+    }
+    .modal-content button {
+      background: var(--secondary-color);
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 30px;
+      cursor: pointer;
+      width: 100%;
+      font-size: 1em;
+      transition: background 0.3s;
+    }
+    .modal-content button:hover { background: var(--primary-color); }
+    .close {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 1.5em;
+      cursor: pointer;
+      color: #888;
+    }
+    
+    /* Drop Zone for Image Upload */
+    .drop-zone {
+      border: 2px dashed var(--secondary-color);
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      color: #aaa;
+      margin-bottom: 10px;
+      position: relative;
+      transition: background-color 0.3s;
+    }
+    .drop-zone.hover { background-color: #fff0e6; }
+    .drop-zone input[type="file"] {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      top: 0;
+      left: 0;
+      cursor: pointer;
+    }
+    .drop-zone img {
+      max-width: 100%;
+      max-height: 150px;
+      margin-top: 10px;
+      border-radius: 8px;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
+</head>
+<body class="theme-0">
+  <header>
+    <h1> Mini Kanban Board</h1>
+    <div id="header-controls">
+      <input type="range" id="themeSlider" min="0" max="2" step="1" value="0" title="Switch Theme">
+      <button id="clearCompletedBtn">Clear Completed</button>
+      <button id="addTaskBtn">Add Task</button>
+    </div>
+  </header>
+  
+  <div class="board">
+    <!-- To Do Column -->
+    <div class="column" data-status="todo">
+      <h2>To Do</h2>
+      <div class="task-list" id="todo"></div>
+    </div>
+    <!-- In Progress Column -->
+    <div class="column" data-status="inprogress">
+      <h2>In Progress</h2>
+      <div class="task-list" id="inprogress"></div>
+    </div>
+    <!-- Done Column -->
+    <div class="column" data-status="done">
+      <h2>Done</h2>
+      <div class="task-list" id="done"></div>
+    </div>
+  </div>
+  
+  <!-- Modal for Adding New Task -->
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="addTaskClose">&times;</span>
+      <h2>Add New Task</h2>
+      <input type="text" id="taskTitle" placeholder="Task Title" required>
+      <textarea id="taskDesc" placeholder="Task Description"></textarea>
+      
+      <!-- Image Drop Zone -->
+      <div id="dropZone" class="drop-zone">
+        <p>Drag & drop an image here or click to select</p>
+        <input type="file" id="taskImage" accept="image/*">
+        <img id="imagePreview" src="" alt="Image Preview" style="display: none;">
+      </div>
+      
+      <label for="taskDueDate">Due Date (optional):</label>
+      <input type="date" id="taskDueDate">
+      
+      <label for="taskPriority">Priority:</label>
+      <select id="taskPriority">
+        <option value="Low">Low</option>
+        <option value="Medium" selected>Medium</option>
+        <option value="High">High</option>
+      </select>
+      
+      <button id="saveTaskBtn">Save Task</button>
+    </div>
+  </div>
+  
+  <!-- Pomodoro Modal -->
+  <div id="pomodoroModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="pomodoroClose">&times;</span>
+      <h2>Pomodoro Timer</h2>
+      <label for="taskSelect">Select Task</label>
+      <select id="taskSelect"></select>
+      <label for="pomodoroTime">Set Time (minutes):</label>
+      <input type="number" id="pomodoroTime" min="1" value="25">
+      <button id="startPomodoroBtn">Start Timer</button>
+      <div id="timerDisplay" style="margin-top:10px; text-align:center; font-size:1.5em;"></div>
+    </div>
+  </div>
+  
+  <!-- Floating Pomodoro Button at Bottom Right -->
+  <button id="pomodoroBtn" style="position: fixed; bottom: 20px; right: 20px; z-index: 100; background: var(--secondary-color); color: #fff; border: none; padding: 15px 20px; border-radius: 30px; cursor: pointer; transition: background 0.3s;">
+    Pomodoro
+  </button>
+  
+  <!-- Audio for Pomodoro chime -->
+  <audio id="pomodoroAudio" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"></audio>
+  
+  <!-- Footer Credit at Bottom Left -->
+  <footer style="position: fixed; bottom: 5px; left: 5px; font-size: 0.7em; color:#888;">
+    Made by Rudrajadaun01
+  </footer>
+  
+  <script>
+    // Retrieve tasks from localStorage
+    let tasks = JSON.parse(localStorage.getItem('kanbanTasks')) || [];
+    
+    // DOM Elements for Task Modal
+    const addTaskBtn = document.getElementById('addTaskBtn');
+    const modal = document.getElementById('modal');
+    const addTaskClose = document.getElementById('addTaskClose');
+    const saveTaskBtn = document.getElementById('saveTaskBtn');
+    const taskTitle = document.getElementById('taskTitle');
+    const taskDesc = document.getElementById('taskDesc');
+    const taskImage = document.getElementById('taskImage');
+    const taskDueDate = document.getElementById('taskDueDate');
+    const taskPriority = document.getElementById('taskPriority');
+    const dropZone = document.getElementById('dropZone');
+    const imagePreview = document.getElementById('imagePreview');
+    
+    // DOM Elements for Header Controls
+    const clearCompletedBtn = document.getElementById('clearCompletedBtn');
+    const themeSlider = document.getElementById('themeSlider');
+    
+    // DOM Elements for Pomodoro Modal
+    const pomodoroBtn = document.getElementById('pomodoroBtn');
+    const pomodoroModal = document.getElementById('pomodoroModal');
+    const pomodoroClose = document.getElementById('pomodoroClose');
+    const taskSelect = document.getElementById('taskSelect');
+    const pomodoroTime = document.getElementById('pomodoroTime');
+    const startPomodoroBtn = document.getElementById('startPomodoroBtn');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const pomodoroAudio = document.getElementById('pomodoroAudio');
+    
+    let droppedImageData = '';
+    
+    // Theme slider event
+    themeSlider.addEventListener('input', (e) => {
+      const value = e.target.value;
+      document.body.className = `theme-${value}`;
+    });
+    
+    // Clear Completed Tasks
+    clearCompletedBtn.addEventListener('click', () => {
+      tasks = tasks.filter(task => task.status !== 'done');
+      updateLocalStorage();
+      renderTasks();
+    });
+    
+    // Open Add Task Modal
+    addTaskBtn.addEventListener('click', () => {
+      modal.style.display = 'flex';
+    });
+    
+    // Close Add Task Modal
+    function closeModalFunc() {
+      modal.style.display = 'none';
+      clearModal();
+    }
+    addTaskClose.addEventListener('click', closeModalFunc);
+    window.addEventListener('click', (e) => {
+      if (e.target === modal) { closeModalFunc(); }
+    });
+    
+    // Clear Add Task Modal inputs
+    function clearModal() {
+      taskTitle.value = '';
+      taskDesc.value = '';
+      taskDueDate.value = '';
+      taskPriority.value = 'Medium';
+      droppedImageData = '';
+      imagePreview.src = '';
+      imagePreview.style.display = 'none';
+    }
+    
+    // Drop zone events for image upload
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('hover');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('hover');
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('hover');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        const file = e.dataTransfer.files[0];
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            droppedImageData = e.target.result;
+            imagePreview.src = droppedImageData;
+            imagePreview.style.display = 'block';
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    });
+    // Handle file input change
+    taskImage.addEventListener('change', () => {
+      if (taskImage.files && taskImage.files[0]) {
+        const file = taskImage.files[0];
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            droppedImageData = e.target.result;
+            imagePreview.src = droppedImageData;
+            imagePreview.style.display = 'block';
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    });
+    
+    // Save new task
+    saveTaskBtn.addEventListener('click', () => {
+      if (taskTitle.value.trim() === '') {
+        alert('Please enter a task title.');
+        return;
+      }
+      const newTask = {
+        id: Date.now(),
+        title: taskTitle.value,
+        description: taskDesc.value,
+        image: droppedImageData,
+        dueDate: taskDueDate.value,
+        priority: taskPriority.value,
+        status: 'todo'
+      };
+      tasks.push(newTask);
+      updateLocalStorage();
+      renderTasks();
+      closeModalFunc();
+    });
+    
+    // Update localStorage
+    function updateLocalStorage() {
+      localStorage.setItem('kanbanTasks', JSON.stringify(tasks));
+    }
+    
+    // Render tasks in columns
+    function renderTasks() {
+      document.getElementById('todo').innerHTML = '';
+      document.getElementById('inprogress').innerHTML = '';
+      document.getElementById('done').innerHTML = '';
+      
+      tasks.forEach(task => {
+        const taskEl = document.createElement('div');
+        taskEl.classList.add('task');
+        taskEl.setAttribute('draggable', 'true');
+        taskEl.dataset.id = task.id;
+        taskEl.dataset.status = task.status;
+        
+        let innerHTML = `<strong>${task.title}</strong>
+          <button class="delete-btn" title="Delete Task">&times;</button>
+          <p>${task.description}</p>`;
+        if (task.image) {
+          innerHTML += `<img src="${task.image}" alt="Task Image">`;
+        }
+        if (task.dueDate) {
+          innerHTML += `<p class="extra">Due: ${task.dueDate}</p>`;
+        }
+        if (task.priority) {
+          innerHTML += `<p class="extra">Priority: ${task.priority}</p>`;
+        }
+        taskEl.innerHTML = innerHTML;
+        
+        // Drag events
+        taskEl.addEventListener('dragstart', dragStart);
+        taskEl.addEventListener('dragend', dragEnd);
+        
+        // Delete task
+        taskEl.querySelector('.delete-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteTask(task.id);
+        });
+        
+        document.getElementById(task.status).appendChild(taskEl);
+      });
+    }
+    
+    // Delete a task by ID
+    function deleteTask(id) {
+      tasks = tasks.filter(task => task.id != id);
+      updateLocalStorage();
+      renderTasks();
+    }
+    
+    // Drag and Drop for Tasks
+    let draggedTask = null;
+    function dragStart(e) {
+      draggedTask = this;
+      setTimeout(() => { this.classList.add('dragging'); }, 0);
+      e.dataTransfer.effectAllowed = "move";
+    }
+    function dragEnd() {
+      this.classList.remove('dragging');
+      draggedTask = null;
+      updateTaskStatus();
+    }
+    const taskLists = document.querySelectorAll('.task-list');
+    taskLists.forEach(list => {
+      list.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const afterElement = getDragAfterElement(list, e.clientY);
+        if (!afterElement) {
+          list.appendChild(draggedTask);
+        } else {
+          list.insertBefore(draggedTask, afterElement);
+        }
+      });
+    });
+    function getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll('.task:not(.dragging)')];
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+          return { offset: offset, element: child };
+        } else {
+          return closest;
+        }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+    function updateTaskStatus() {
+      document.querySelectorAll('.task').forEach(taskEl => {
+        const newStatus = taskEl.parentElement.id;
+        const taskId = taskEl.dataset.id;
+        const taskIndex = tasks.findIndex(task => task.id == taskId);
+        if (taskIndex > -1) {
+          tasks[taskIndex].status = newStatus;
+        }
+      });
+      updateLocalStorage();
+    }
+    
+    // Pomodoro Modal Functions
+    pomodoroBtn.addEventListener('click', () => {
+      // Populate task dropdown with tasks not yet marked as done
+      taskSelect.innerHTML = "";
+      tasks.filter(task => task.status !== "done").forEach(task => {
+         let option = document.createElement("option");
+         option.value = task.id;
+         option.text = task.title;
+         taskSelect.appendChild(option);
+      });
+      pomodoroModal.style.display = "flex";
+    });
+    pomodoroClose.addEventListener('click', closePomodoro);
+    window.addEventListener('click', (e) => {
+      if (e.target === pomodoroModal) { closePomodoro(); }
+    });
+    function closePomodoro() {
+      pomodoroModal.style.display = "none";
+      timerDisplay.innerText = "";
+      startPomodoroBtn.disabled = false;
+      pomodoroTime.disabled = false;
+      taskSelect.disabled = false;
+    }
+    startPomodoroBtn.addEventListener('click', () => {
+      let selectedTaskId = taskSelect.value;
+      let timeMinutes = parseInt(pomodoroTime.value);
+      if (!selectedTaskId || isNaN(timeMinutes) || timeMinutes <= 0) {
+         alert("Please select a valid task and time.");
+         return;
+      }
+      // Disable inputs during timer
+      startPomodoroBtn.disabled = true;
+      pomodoroTime.disabled = true;
+      taskSelect.disabled = true;
+      
+      let timeLeft = timeMinutes * 60; // seconds
+      timerDisplay.innerText = formatTime(timeLeft);
+      
+      const timerInterval = setInterval(() => {
+         timeLeft--;
+         timerDisplay.innerText = formatTime(timeLeft);
+         if(timeLeft <= 0) {
+             clearInterval(timerInterval);
+             pomodoroAudio.play();
+             // Mark selected task as complete
+             tasks.forEach(task => {
+                if(task.id == selectedTaskId) {
+                   task.status = "done";
+                }
+             });
+             updateLocalStorage();
+             renderTasks();
+             alert("Time's up! Task marked as complete.");
+             closePomodoro();
+         }
+      }, 1000);
+    });
+    function formatTime(seconds) {
+      let m = Math.floor(seconds / 60);
+      let s = seconds % 60;
+      return m.toString().padStart(2, '0') + ":" + s.toString().padStart(2, '0');
+    }
+    
+    // Initial render
+    renderTasks();
+  </script>
+</body>
+</html>
