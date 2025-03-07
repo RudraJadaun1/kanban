@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -359,7 +359,7 @@
     // Theme slider event
     themeSlider.addEventListener('input', (e) => {
       const value = e.target.value;
-      document.body.className = theme-${value};
+      document.body.className = `theme-${value}`;
     });
     
     // Clear Completed Tasks
@@ -474,17 +474,17 @@
         taskEl.dataset.id = task.id;
         taskEl.dataset.status = task.status;
         
-        let innerHTML = <strong>${task.title}</strong>
+        let innerHTML = `<strong>${task.title}</strong>
           <button class="delete-btn" title="Delete Task">&times;</button>
-          <p>${task.description}</p>;
+          <p>${task.description}</p>`;
         if (task.image) {
-          innerHTML += <img src="${task.image}" alt="Task Image">;
+          innerHTML += `<img src="${task.image}" alt="Task Image">`;
         }
         if (task.dueDate) {
-          innerHTML += <p class="extra">Due: ${task.dueDate}</p>;
+          innerHTML += `<p class="extra">Due: ${task.dueDate}</p>`;
         }
         if (task.priority) {
-          innerHTML += <p class="extra">Priority: ${task.priority}</p>;
+          innerHTML += `<p class="extra">Priority: ${task.priority}</p>`;
         }
         taskEl.innerHTML = innerHTML;
         
@@ -624,5 +624,4 @@
     renderTasks();
   </script>
 </body>
-</html> alanyse this code
-
+</html>
