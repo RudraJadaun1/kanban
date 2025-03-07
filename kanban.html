@@ -54,7 +54,7 @@
       font-weight: 700;
       color: var(--primary-color);
     }
-    /* Header Controls: Theme slider, clear & add task */
+    /* Header Controls: Theme slider, clear & add task, sign in/out */
     #header-controls {
       display: flex;
       align-items: center;
@@ -64,7 +64,7 @@
     #themeSlider {
       width: 100px;
     }
-    #clearCompletedBtn, #addTaskBtn {
+    #clearCompletedBtn, #addTaskBtn, #googleSignInBtn, #signOutBtn {
       background: var(--secondary-color);
       color: #fff;
       border: none;
@@ -74,7 +74,7 @@
       font-size: 1em;
       transition: background 0.3s;
     }
-    #clearCompletedBtn:hover, #addTaskBtn:hover {
+    #clearCompletedBtn:hover, #addTaskBtn:hover, #googleSignInBtn:hover, #signOutBtn:hover {
       background: var(--primary-color);
     }
     
@@ -246,6 +246,9 @@
       <input type="range" id="themeSlider" min="0" max="2" step="1" value="0" title="Switch Theme">
       <button id="clearCompletedBtn">Clear Completed</button>
       <button id="addTaskBtn">Add Task</button>
+      <!-- Firebase Auth Buttons -->
+      <button id="googleSignInBtn">Sign in with Google</button>
+      <button id="signOutBtn" style="display:none;">Sign Out</button>
     </div>
   </header>
   
@@ -310,24 +313,47 @@
     </div>
   </div>
   
-  <!-- Floating Pomodoro Button at Bottom Right -->
+  <!-- Floating Pomodoro Button -->
   <button id="pomodoroBtn" style="position: fixed; bottom: 20px; right: 20px; z-index: 100; background: var(--secondary-color); color: #fff; border: none; padding: 15px 20px; border-radius: 30px; cursor: pointer; transition: background 0.3s;">
     Pomodoro
   </button>
   
-  <!-- Audio for Pomodoro chime -->
-  <audio id="pomodoroAudio" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"></audio>
-  
-  <!-- Footer Credit at Bottom Left -->
+  <!-- Footer -->
   <footer style="position: fixed; bottom: 5px; left: 5px; font-size: 0.7em; color:#888;">
     Made by Rudrajadaun01
   </footer>
   
-  <script>
-    // Retrieve tasks from localStorage
-    let tasks = JSON.parse(localStorage.getItem('kanbanTasks')) || [];
+  <!-- Firebase and Application Scripts -->
+  <script type="module">
+    // Import Firebase modules
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-analytics.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
     
-    // DOM Elements for Task Modal
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDqaxmhETmcvQlIgiwvM955_PEXhPExU0M",
+      authDomain: "kanbanboard-848b7.firebaseapp.com",
+      projectId: "kanbanboard-848b7",
+      storageBucket: "kanbanboard-848b7.firebasestorage.app",
+      messagingSenderId: "446521770108",
+      appId: "1:446521770108:web:8e6011073607250858c9f9",
+      measurementId: "G-HPBZ69RYYT"
+    };
+    
+    // Initialize Firebase
+    const appFirebase = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(appFirebase);
+    const auth = getAuth(appFirebase);
+    const db = getFirestore(appFirebase);
+    const provider = new GoogleAuthProvider();
+    
+    // Global variables
+    let tasks = [];
+    let droppedImageData = '';
+    
+    // DOM Elements
     const addTaskBtn = document.getElementById('addTaskBtn');
     const modal = document.getElementById('modal');
     const addTaskClose = document.getElementById('addTaskClose');
@@ -340,11 +366,9 @@
     const dropZone = document.getElementById('dropZone');
     const imagePreview = document.getElementById('imagePreview');
     
-    // DOM Elements for Header Controls
     const clearCompletedBtn = document.getElementById('clearCompletedBtn');
     const themeSlider = document.getElementById('themeSlider');
     
-    // DOM Elements for Pomodoro Modal
     const pomodoroBtn = document.getElementById('pomodoroBtn');
     const pomodoroModal = document.getElementById('pomodoroModal');
     const pomodoroClose = document.getElementById('pomodoroClose');
@@ -352,9 +376,9 @@
     const pomodoroTime = document.getElementById('pomodoroTime');
     const startPomodoroBtn = document.getElementById('startPomodoroBtn');
     const timerDisplay = document.getElementById('timerDisplay');
-    const pomodoroAudio = document.getElementById('pomodoroAudio');
     
-    let droppedImageData = '';
+    const googleSignInBtn = document.getElementById("googleSignInBtn");
+    const signOutBtn = document.getElementById("signOutBtn");
     
     // Theme slider event
     themeSlider.addEventListener('input', (e) => {
@@ -362,10 +386,12 @@
       document.body.className = `theme-${value}`;
     });
     
-    // Clear Completed Tasks
+    // Clear Completed Tasks: Remove tasks marked as done
     clearCompletedBtn.addEventListener('click', () => {
+      tasks.filter(task => task.status === 'done').forEach(task => {
+        deleteTaskFromFirestore(task.id);
+      });
       tasks = tasks.filter(task => task.status !== 'done');
-      updateLocalStorage();
       renderTasks();
     });
     
@@ -382,9 +408,10 @@
     addTaskClose.addEventListener('click', closeModalFunc);
     window.addEventListener('click', (e) => {
       if (e.target === modal) { closeModalFunc(); }
+      if (e.target === pomodoroModal) { closePomodoro(); }
     });
     
-    // Clear Add Task Modal inputs
+    // Clear modal inputs
     function clearModal() {
       taskTitle.value = '';
       taskDesc.value = '';
@@ -419,7 +446,6 @@
         }
       }
     });
-    // Handle file input change
     taskImage.addEventListener('change', () => {
       if (taskImage.files && taskImage.files[0]) {
         const file = taskImage.files[0];
@@ -435,8 +461,8 @@
       }
     });
     
-    // Save new task
-    saveTaskBtn.addEventListener('click', () => {
+    // Save Task: Create a new task and store in Firestore
+    saveTaskBtn.addEventListener('click', async () => {
       if (taskTitle.value.trim() === '') {
         alert('Please enter a task title.');
         return;
@@ -451,17 +477,12 @@
         status: 'todo'
       };
       tasks.push(newTask);
-      updateLocalStorage();
+      await saveTaskToFirestore(newTask);
       renderTasks();
       closeModalFunc();
     });
     
-    // Update localStorage
-    function updateLocalStorage() {
-      localStorage.setItem('kanbanTasks', JSON.stringify(tasks));
-    }
-    
-    // Render tasks in columns
+    // Render tasks in the three columns
     function renderTasks() {
       document.getElementById('todo').innerHTML = '';
       document.getElementById('inprogress').innerHTML = '';
@@ -492,7 +513,7 @@
         taskEl.addEventListener('dragstart', dragStart);
         taskEl.addEventListener('dragend', dragEnd);
         
-        // Delete task
+        // Delete task event
         taskEl.querySelector('.delete-btn').addEventListener('click', (e) => {
           e.stopPropagation();
           deleteTask(task.id);
@@ -502,14 +523,14 @@
       });
     }
     
-    // Delete a task by ID
-    function deleteTask(id) {
-      tasks = tasks.filter(task => task.id != id);
-      updateLocalStorage();
+    // Delete task function (both locally and in Firestore)
+    async function deleteTask(taskId) {
+      tasks = tasks.filter(task => task.id != taskId);
+      await deleteTaskFromFirestore(taskId);
       renderTasks();
     }
     
-    // Drag and Drop for Tasks
+    // Drag and Drop for tasks
     let draggedTask = null;
     function dragStart(e) {
       draggedTask = this;
@@ -545,21 +566,22 @@
         }
       }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
-    function updateTaskStatus() {
+    async function updateTaskStatus() {
       document.querySelectorAll('.task').forEach(taskEl => {
         const newStatus = taskEl.parentElement.id;
         const taskId = taskEl.dataset.id;
         const taskIndex = tasks.findIndex(task => task.id == taskId);
         if (taskIndex > -1) {
           tasks[taskIndex].status = newStatus;
+          // Update Firestore with new status
+          saveTaskToFirestore(tasks[taskIndex]);
         }
       });
-      updateLocalStorage();
     }
     
-    // Pomodoro Modal Functions
+    // Pomodoro Timer Functions
     pomodoroBtn.addEventListener('click', () => {
-      // Populate task dropdown with tasks not yet marked as done
+      // Populate task dropdown with tasks not marked as done
       taskSelect.innerHTML = "";
       tasks.filter(task => task.status !== "done").forEach(task => {
          let option = document.createElement("option");
@@ -570,9 +592,6 @@
       pomodoroModal.style.display = "flex";
     });
     pomodoroClose.addEventListener('click', closePomodoro);
-    window.addEventListener('click', (e) => {
-      if (e.target === pomodoroModal) { closePomodoro(); }
-    });
     function closePomodoro() {
       pomodoroModal.style.display = "none";
       timerDisplay.innerText = "";
@@ -587,7 +606,6 @@
          alert("Please select a valid task and time.");
          return;
       }
-      // Disable inputs during timer
       startPomodoroBtn.disabled = true;
       pomodoroTime.disabled = true;
       taskSelect.disabled = true;
@@ -600,14 +618,15 @@
          timerDisplay.innerText = formatTime(timeLeft);
          if(timeLeft <= 0) {
              clearInterval(timerInterval);
-             pomodoroAudio.play();
-             // Mark selected task as complete
+             // Play audio chime
+             document.getElementById("pomodoroAudio").play();
+             // Mark selected task as done
              tasks.forEach(task => {
                 if(task.id == selectedTaskId) {
                    task.status = "done";
+                   saveTaskToFirestore(task);
                 }
              });
-             updateLocalStorage();
              renderTasks();
              alert("Time's up! Task marked as complete.");
              closePomodoro();
@@ -620,8 +639,99 @@
       return m.toString().padStart(2, '0') + ":" + s.toString().padStart(2, '0');
     }
     
-    // Initial render
-    renderTasks();
+    // Firebase Authentication and Firestore Functions
+    
+    // Sign in with Google
+    async function signIn() {
+      try {
+        const result = await signInWithPopup(auth, provider);
+        console.log("Signed in as:", result.user.displayName);
+        loadUserTasks(result.user.uid);
+      } catch (error) {
+        console.error("Error during sign in:", error);
+      }
+    }
+    
+    // Sign out the current user
+    async function signOutUser() {
+      try {
+        await signOut(auth);
+        console.log("User signed out.");
+        tasks = [];
+        renderTasks();
+      } catch (error) {
+        console.error("Error signing out:", error);
+      }
+    }
+    
+    // Load tasks for the signed-in user from Firestore
+    async function loadUserTasks(userId) {
+      try {
+        const querySnapshot = await getDocs(collection(db, "users", userId, "tasks"));
+        tasks = [];
+        querySnapshot.forEach((docSnap) => {
+          tasks.push(docSnap.data());
+        });
+        renderTasks();
+      } catch (error) {
+        console.error("Error loading tasks:", error);
+      }
+    }
+    
+    // Save a task to Firestore
+    async function saveTaskToFirestore(task) {
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          console.error("User not signed in");
+          return;
+        }
+        await setDoc(doc(db, "users", user.uid, "tasks", task.id.toString()), task);
+        console.log("Task saved to Firestore");
+      } catch (error) {
+        console.error("Error saving task:", error);
+      }
+    }
+    
+    // Delete a task from Firestore
+    async function deleteTaskFromFirestore(taskId) {
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          console.error("User not signed in");
+          return;
+        }
+        await deleteDoc(doc(db, "users", user.uid, "tasks", taskId.toString()));
+        console.log("Task deleted from Firestore");
+      } catch (error) {
+        console.error("Error deleting task:", error);
+      }
+    }
+    
+    // Listen for changes in authentication state
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log("User is signed in:", user.displayName);
+        googleSignInBtn.style.display = "none";
+        signOutBtn.style.display = "inline-block";
+        loadUserTasks(user.uid);
+      } else {
+        console.log("No user is signed in.");
+        googleSignInBtn.style.display = "inline-block";
+        signOutBtn.style.display = "none";
+        tasks = [];
+        renderTasks();
+      }
+    });
+    
+    // Attach sign in and sign out events to buttons
+    googleSignInBtn.addEventListener("click", signIn);
+    signOutBtn.addEventListener("click", signOutUser);
+    
   </script>
+  
+  <!-- Audio for Pomodoro chime -->
+  <audio id="pomodoroAudio" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"></audio>
+  
 </body>
 </html>
